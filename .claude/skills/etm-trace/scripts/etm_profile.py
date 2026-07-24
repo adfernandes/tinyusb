@@ -73,8 +73,13 @@ def parse_profile(path):
         if name == "Total" and m_inst and m_src:
             totals["src_cov"] = num(m_src.group(1)), num(m_src.group(2))
             totals["inst_cov"] = num(m_inst.group(1)), num(m_inst.group(2))
-        elif name in funcs and m_inst:
-            funcs[name]["inst_pct"] = float(m_inst.group(3))
+        elif m_inst:
+            # match the de-collided key when a same-named static from another
+            # module was renamed during the profile pass
+            key = name if (name in funcs and funcs[name]["module"] == module) \
+                else f"{name} [{module}]"
+            if key in funcs:
+                funcs[key]["inst_pct"] = float(m_inst.group(3))
     return funcs, totals
 
 

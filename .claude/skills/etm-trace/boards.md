@@ -91,6 +91,11 @@ Board caveats (beyond the table):
   caused intermittent "Failed to initialize DAP" — the reference runs 4 MHz.
   ISR entry: `--isr tusb_int_handler,dcd_int_handler` (FSP's
   usbfs_interrupt_handler symbol never actually executes).
+- **ra6m5_ek / ra8m1_ek — `--attach` needs a debugger-booted target**: the
+  firmware TRCKCR setup is gated on DHCSR.C_DEBUGEN (an unguarded write
+  wedges a standalone boot un-attachable until power-cycle), so a board
+  booted WITHOUT a debugger has no trace clock and an `--attach` capture
+  reads silence. Reflash/reset through the capture default flow first.
 - **ra8m1_ek**: **J9 must be closed** (holds the on-board J-Link OB in
   reset — open = SWD contention, intermittent "Failed to initialize DAP",
   even an apparent brick recoverable only by power-cycle/J16 boot mode).
