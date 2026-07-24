@@ -66,7 +66,7 @@ def parse_profile(path):
     for module, name, cells in rows(lines[cov_start:prof_start]):
         m_src = cov_pat.match(cells[0]) if cells else None
         m_inst = cov_pat.match(cells[1]) if len(cells) > 1 else None
-        if name == "Total" and m_inst:
+        if name == "Total" and m_inst and m_src:
             totals["src_cov"] = num(m_src.group(1)), num(m_src.group(2))
             totals["inst_cov"] = num(m_inst.group(1)), num(m_inst.group(2))
         elif name in funcs and m_inst:
@@ -120,14 +120,29 @@ def iter_itrace(path):
     caller reads unit separately with itrace_unit()."""
     with open(path, newline="", errors="replace") as f:
         rd = csv.reader(f)
-        next(rd, None)
+        hdr = next(rd, None) or []
+        # --no-timestamps captures drop the Timestamp column entirely: locate
+        # the Address column from the header and yield t=None for such rows
+        # (consumers count instructions but skip time math)
+        has_ts = any("Timestamp" in c for c in hdr)
+        try:
+            addr_i = next(i for i, c in enumerate(hdr) if "Address" in c)
+        except StopIteration:
+            addr_i = 1 if has_ts else 0
         for row in rd:
-            if not row or row[0] == "PC" or len(row) < 2:
+            if not row or len(row) <= addr_i:
                 continue
             try:
-                yield float(row[0]), int(row[1], 16)
+                addr = int(row[addr_i], 16)
             except ValueError:
                 continue
+            if has_ts and row[0] != "PC":
+                try:
+                    yield float(row[0]), addr
+                    continue
+                except ValueError:
+                    pass
+            yield None, addr
 
 
 def itrace_unit(path):
@@ -144,6 +159,8 @@ def time_by_func(path, syms):
     sample = []
     t_prev = None
     for t, _ in iter_itrace(path):
+        if t is None:
+            continue
         if t_prev is not None and t_prev - t > 0:
             sample.append(t_prev - t)
             if len(sample) >= 200000:
@@ -158,6 +175,8 @@ def time_by_func(path, syms):
         fn = addr_to_func(syms, a)
         if fn:
             cf[fn] = cf.get(fn, 0) + 1
+        if t is None:
+            continue
         if t_prev is not None:
             d = t_prev - t
             if 0 < d < cap and fn:
@@ -180,6 +199,8 @@ def isr_report(itrace, elf, isr_arg, top):
 
     usb_rows, tick_rows, tmin, tmax = [], [], None, None
     for t, a in iter_itrace(itrace):
+        if t is None:
+            continue  # --no-timestamps capture: the <20-rows message below applies
         tmin = t if tmin is None else min(tmin, t)
         tmax = t if tmax is None else max(tmax, t)
         if any(lo <= a < hi for lo, hi in body):
@@ -195,10 +216,12 @@ def isr_report(itrace, elf, isr_arg, top):
               f"({len(tick_rows)} rows) - capture with timestamps enabled")
         return
 
-    # rough raw-units-per-1ms from the large mode of consecutive tick deltas
+    # rough raw-units-per-1ms from the large mode of consecutive tick deltas;
+    # threshold from the median, not the max - one trace-overflow gap would
+    # otherwise inflate the cut and leave only outliers in the sample
     deltas = [b[0] - a[0] for a, b in zip(tick_rows, tick_rows[1:])]
-    big = [d for d in deltas if d > max(deltas) / 10]
-    raw_ms = statistics.median(big)
+    big = [d for d in deltas if d > 10 * statistics.median(deltas)]
+    raw_ms = statistics.median(big) if big else statistics.median(deltas)
     gap = 0.03 * raw_ms       # 30 us in raw units
     edge = 0.05 * raw_ms
 
@@ -390,11 +413,18 @@ def main():
         cshare = {k: v / tc for k, v in cf.items()}
         unit = itrace_unit(itrace)
         print(f"\n## Instruction history (itrace.csv, unit '{unit}')\n")
-        print(f"- {n:,} instructions; top {args.top} by TIME share "
-              f"(vs instruction share):")
-        for name, ts in sorted(tshare.items(), key=lambda kv: -kv[1])[:args.top]:
-            print(f"  - `{short(name)}`: {100 * ts:.1f}% time, "
-                  f"{100 * cshare.get(name, 0):.1f}% instructions")
+        if not tf:
+            print(f"- {n:,} instructions, NO timestamps (--no-timestamps "
+                  f"capture): time shares unavailable, top {args.top} by "
+                  f"instruction share:")
+            for name, cs in sorted(cshare.items(), key=lambda kv: -kv[1])[:args.top]:
+                print(f"  - `{short(name)}`: {100 * cs:.1f}% instructions")
+        else:
+            print(f"- {n:,} instructions; top {args.top} by TIME share "
+                  f"(vs instruction share):")
+            for name, ts in sorted(tshare.items(), key=lambda kv: -kv[1])[:args.top]:
+                print(f"  - `{short(name)}`: {100 * ts:.1f}% time, "
+                      f"{100 * cshare.get(name, 0):.1f}% instructions")
 
     lines_csv = os.path.join(args.capture_dir, "profile_lines.csv")
     if os.path.isfile(lines_csv):

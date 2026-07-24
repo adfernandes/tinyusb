@@ -10,6 +10,7 @@
 */
 void OnProjectLoad (void) {
    Project.SetTraceSource ("Trace Pins");
+   Project.SetTracePortWidth (4);
   Project.SetTraceTiming (100, 100, 100, 100);
   Project.SetSWO (0);
   Edit.SysVar (VAR_TRACE_CORE_CLOCK, 200000000);

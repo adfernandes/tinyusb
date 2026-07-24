@@ -103,25 +103,27 @@ void board_init(void) {
   // standalone boot must skip trace init or the write wedges the chip into
   // an un-attachable crash loop (recover: power-cycle + immediate erase)
   if (DCB->DHCSR & DCB_DHCSR_C_DEBUGEN_Msk) {
-  // TRCKCR is protected by PRCR bit0 register
-  R_SYSTEM->PRCR = (uint16_t) (BSP_PRV_PRCR_KEY | 0x01);
+    // TRCKCR is protected by PRCR bit0 register
+    R_SYSTEM->PRCR = (uint16_t) (BSP_PRV_PRCR_KEY | 0x01);
 
-  // TCLK pin = TRCLK/2; set the divider with TRCKEN=0 first (HUM procedure).
-  // Values are the empirical per-board ceilings: one step below the divider
-  // at which the stream dies mid-run.
+    // TCLK pin = TRCLK/2; set the divider with TRCKEN=0 first (HUM procedure).
+    // Values are the empirical per-board ceilings.
 #if defined(BSP_MCU_GROUP_RA8M1)
-  // 480 MHz CPU: /8 -> 60 MHz TRCLK, 30 MHz pin (/4 = 60 MHz pin dies)
-  R_SYSTEM->TRCKCR = 0x02;
-  R_SYSTEM->TRCKCR = R_SYSTEM_TRCKCR_TRCKEN_Msk | 0x02;
+    // 480 MHz CPU: /4 -> 120 MHz TRCLK, 60 MHz pin - chip max, clean on
+    // EK-RA8M1 with the committed empty-OnTraceStart JLinkScript (which
+    // defers the trace clock to firmware; without it the FSP MOCO->PLL
+    // switch steps the clock mid-stream and any divider fails)
+    R_SYSTEM->TRCKCR = 0x02;
+    R_SYSTEM->TRCKCR = R_SYSTEM_TRCKCR_TRCKEN_Msk | 0x02;
 #else
-  // RA6M5 200 MHz CPU: /4 -> 50 MHz TRCLK, 25 MHz pin. /2 (50 MHz pin) is
-  // silent on the EK-RA6M5 in every combination - board path ceiling,
-  // reconfirmed with J9 closed and the OnTraceStart override
-  R_SYSTEM->TRCKCR = 0x02;
-  R_SYSTEM->TRCKCR = R_SYSTEM_TRCKCR_TRCKEN_Msk | 0x02;
+    // RA6M5 200 MHz CPU: /4 -> 50 MHz TRCLK, 25 MHz pin. /2 (50 MHz pin) is
+    // silent on the EK-RA6M5 in every combination - board path ceiling,
+    // reconfirmed with J9 closed and the OnTraceStart override
+    R_SYSTEM->TRCKCR = 0x02;
+    R_SYSTEM->TRCKCR = R_SYSTEM_TRCKCR_TRCKEN_Msk | 0x02;
 #endif
 
-  R_SYSTEM->PRCR = (uint16_t) BSP_PRV_PRCR_KEY;
+    R_SYSTEM->PRCR = (uint16_t) BSP_PRV_PRCR_KEY;
   }
 #endif
 

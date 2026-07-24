@@ -126,6 +126,12 @@ def resolve_board(board):
             name, block = m.group(1), m.group(0)
             if name == "OnProjectLoad":
                 continue
+            elif name == "BeforeTargetConnect":
+                # the generated project synthesizes its own BeforeTargetConnect
+                # (JLINK_SCRIPT_HOOK) from the SetJLinkScript regex below;
+                # inheriting the reference's copy too would emit a duplicate
+                # function definition
+                continue
             elif name == "AfterTargetReset":
                 cfg["reset_hook"] = block
             elif name == "AfterTargetDownload":
@@ -472,7 +478,6 @@ def main():
                             start_new_session=True)
     profile_out = os.path.join(outdir, "code_profile.txt")
     itrace_out = os.path.join(outdir, "itrace.csv")
-    ok = False
     try:
         ses.connect(20)
         ses.drain(3)  # version banner
@@ -513,7 +518,6 @@ def main():
             ses.wait_echo(f'Export.PowerGraphs ("{outdir}/power.csv")', 60)
         ses.send("Debug.Stop", 5)
         ses.send("File.Exit", 2)
-        ok = True
     finally:
         for _ in range(15):
             if proc.poll() is not None:
@@ -551,9 +555,6 @@ def main():
         sys.exit("error: session completed but NO trace data was collected "
                  "(profile totals are zero) - trace signal not reaching the "
                  "probe: check wiring/connector, trace pinmux, sample timing.")
-    if not ok:
-        sys.exit("error: session did not complete cleanly (see session.log)")
-
     print(f"\ncapture OK: {outdir}")
     print(f"  code_profile.txt  ({os.path.getsize(profile_out)} bytes)")
     if args.trace_csv:

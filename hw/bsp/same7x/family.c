@@ -82,6 +82,7 @@ void board_init(void) {
     PMC->PMC_SCER = PMC_SCER_PCK3;
     while (!(PMC->PMC_SR & PMC_SR_PCKRDY3)) {}
   }
+  _pmc_enable_periph_clock(ID_PIOD);
   uint32_t const clk_pin = PIO_PD8D_TPIU_TRACECLK;
   uint32_t const dat_pin = PIO_PD4C_TPIU_TRACED0 | PIO_PD5C_TPIU_TRACED1 |
                            PIO_PD6C_TPIU_TRACED2 | PIO_PD7C_TPIU_TRACED3;

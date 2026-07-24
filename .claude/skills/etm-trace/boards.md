@@ -23,11 +23,12 @@ reference.
 | ea4088_quickstart  | 120 MHz              | 120 MHz               | 4     | 0 (unset) | J7 (fully wired)              | —                                           |
 | nrf52840dk         | 64 MHz               | 16 MHz (hw cap)       | 4     | 0 (unset) | solder P25, SW7 → Alt         | —                                           |
 | nrf5340dk (M33)    | 64 MHz               | 16 MHz (TAD, forced)  | 4     | +3 ns   | mount P25; cut SB27/SB28      | —                                           |
-| mimxrt1170_evkb    | 996 MHz              | 50 MHz (root/2)       | 1     | 0       | weld 0 Ω R1881-R1886; JP4 shorted; J58 (populated) | reflow R1882-R1884 (D1-D3 open) → width 4 |
+| mimxrt1170_evkb    | 996 MHz              | 50 MHz (root/2)       | 1     | 0       | weld 0 Ω R1881-R1886; JP4 shorted; J58 (populated) | re-weld R1884 (D3 open; D1/D2 meter-verified good) → width 4 |
 | ra6m5_ek (M33)     | 200 MHz              | 25 MHz (TRCLK/4 /2)   | 4     | 0 (unset) | J9 closed; native J20 trace | —                                           |
 | ra8m1_ek (M85)     | 480 MHz              | 60 MHz (TRCLK/4 /2)   | 4     | 0 (unset) | J9 closed + Table 7 jumpers | —                                           |
 | raspberry_pi_pico2 (RP2350 M33) | 48 MHz  | 24 MHz (clk_sys/2)    | 4     | 0 (unset) | fly-wire GPIO1-5 → MIPI20 (map in jdebug) | 72-80 MHz per seating (re-qualify); >80 needs V3 probe + trace board |
 | same54_xplained (E54 M4F) | 120 MHz       | 60 MHz (CPU/2)        | 4     | 0 (unset) | none — populated 20-pin ETM header | —                                      |
+| same70_xplained (E70 M7) | 300 MHz         | 37.5 MHz (PCK3/2)     | 1     | 0 (unset) | solder 20-pin header on J403 (bottom) | width 4 blocked: D1 (J403.16) dead at speed — probe-channel crosscheck pending |
 | SEGGER H7/F407 ref | demo defaults        | demo                  | 4     | demo    | probe-powered: add `--power`  | —                                           |
 
 Board caveats (beyond the table):
@@ -35,7 +36,7 @@ Board caveats (beyond the table):
 - **stm32h743eval**: startup-burst overflow at 400 MHz is normal (reduce
   PLLN in board.h for overflow-free capture); timestamp ref 200 MHz.
 - **stm32n657nucleo** (M55, flashless): **JP2 (BOOT1) must be 1** — the app
-  is a RAM image the debugger loads (Development boot); in flash boot theb
+  is a RAM image the debugger loads (Development boot); in flash boot the
   bootROM parks the chip un-attachable ("Can not attach to CPU"). SEGGER's
   KB says BOOT0/BOOT1 = 0/0 for their example — that is flash boot and it
   does NOT attach; the board manual's Table 11 is right. 600 MHz core kills
@@ -76,7 +77,12 @@ Board caveats (beyond the table):
   and enables the CM7 platform trace-funnel port, which J-Link doesn't
   program: without it everything reads register-perfect yet zero data
   arrives. JP4 must be shorted (disables MCU-Link SWD) for the external
-  J-Trace on J58. FlexSPI apps: ROM bootloader must set SP/PC — the
+  J-Trace on J58; a powered MCU-Link USB breaks the external probe's connect
+  even with JP4 shorted - power the board from another port. **Width is 1 or
+  4 only**: a width-2 request arms the CSSYS TPIU (E004_6000) and the probe
+  sampler at 4-bit anyway (CSPSR reads 0x8 after a width-2 session; a live
+  CSPSR=2 poke with LAR unlock + Trace.Clear still captures nothing because
+  the probe keeps sampling 4-bit). FlexSPI apps: ROM bootloader must set SP/PC — the
   committed reset/download hooks handle this. Startup-burst overflow at
   996 MHz is normal. No Ethernet (100M) while tracing.
 - **ra6m5_ek**: TRCKCR div-2 (100 MHz TRCLK = 50 MHz pin, the chip max) is
@@ -118,7 +124,7 @@ Board caveats (beyond the table):
   trace component map (funnel/TPIU/ETM are not in the ROM table → "Required
   trace components for pin trace not found", 0 fetches) and re-arms the whole
   chip-side path via `OnTraceStart` at every resume. Firmware therefore does
-  no trace setup; TRACE_ETM builds only (a) pin clk_sys to 72 MHz from crt0
+  no trace setup; TRACE_ETM builds only (a) pin clk_sys to 48 MHz from crt0
   (board.cmake) — the fly-wire ceiling: 96/150 MHz kill the stream in the
   startup burst at any sample timing (and at 150 MHz the saturated probe
   stops answering halts, "CPU could not be halted"); any post-arm clock
@@ -136,5 +142,15 @@ Board caveats (beyond the table):
   `trace_etm_init` feeds it GCLK0. Pins PC24-28 mux to function H. The
   populated 20-pin header runs chip-max 60 MHz TRACECLK width 4 with no
   timing adjustment - the connector-vs-flywire contrast board.
+- **same70_xplained**: J403 is a bottom-side bare footprint — solder the
+  header. Trace pins PD4-7 double as the KSZ8081 PHY's RMII receive outputs:
+  TRACE_ETM builds hold it in reset (PHY_RESET=PC10) or it drives against
+  the stream. TPIU clock = PCK3 (datasheet 16.7.4), run at MCK/2; TPIU
+  programming while PCK3 is stopped is silently LOST — the reference starts
+  PCK3 in the post-reset/download hooks (a reset wipes the PMC, so
+  AfterTargetConnect is too early). Width 1 validated at the stock 300 MHz
+  core; width 2/4 blocked on a dead D1 line at J403.16 (clean at DC by
+  meter, dead at speed — probe-channel crosscheck on a known-good width-4
+  board pending). No Ethernet while tracing.
 - **SEGGER ref boards**: run their own demo (ladder step 3 flags); `--isr`
   degrades gracefully without a live SysTick.
