@@ -160,6 +160,10 @@ def resolve_board(board):
         for path in glob.glob(f"{REPO_ROOT}/hw/bsp/*/boards/{board}/board.cmake"):
             m = re.search(r'JLINK_DEVICE\s+([^\s)]+)\s*\)', open(path).read())
             if m:
+                if "${" in m.group(1):
+                    sys.exit(f"error: {path} defines JLINK_DEVICE via an "
+                             f"unexpanded CMake variable ({m.group(1)}) - pass "
+                             f"--device explicitly for this board")
                 cfg["device"] = m.group(1)
                 cfg["ref"] = path
                 break

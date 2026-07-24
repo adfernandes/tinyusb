@@ -65,13 +65,16 @@ void board_init(void) {
 #if defined(TRACE_ETM)
   // same70_xplained J403 (Cortex Debug+ETM footprint, bottom side) carries
   // 4-bit trace: TRACECLK=PD8 (peripheral D), TRACED0-3=PD4-7 (peripheral C).
+#ifdef TRACE_ETM_QUIET_ENET_PHY
   // The trace pins double as the Ethernet PHY's RMII receive lines
   // (PD4=CRS_DV, PD5/6=RXD0/1, PD7=RXER - PHY OUTPUTS): hold the KSZ8081 in
-  // reset (PHY_RESET=PC10 low) or it drives against the trace stream.
+  // reset or it drives against the trace stream. The reset net is a BOARD
+  // property (same70_xplained: PHY_RESET=PC10), hence the board.h gate.
   _pmc_enable_periph_clock(ID_PIOC);
   gpio_set_pin_level(GPIO(GPIO_PORTC, 10), false);
   gpio_set_pin_direction(GPIO(GPIO_PORTC, 10), GPIO_DIRECTION_OUT);
   gpio_set_pin_function(GPIO(GPIO_PORTC, 10), GPIO_PIN_FUNCTION_OFF);
+#endif
 
   // The TPIU is clocked from PCK3 (datasheet 16.7.4) - run it from MCK.
   // skip if the debugger already started PCK3 (reprogramming glitches the

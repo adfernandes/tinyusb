@@ -131,12 +131,15 @@ static void trace_etm_init(void) {
   // breaks ETM trace - switch the pad to GPIO (MIMXRT1170-EVKB HUG 3.2)
   IOMUXC_SetPinMux(IOMUXC_GPIO_LPSR_10_GPIO12_IO10, 0U);
 
+#ifdef TRACE_ETM_QUIET_ENET_PHY
   // Hold the 100M Ethernet PHY (RTL8201) in reset: its RMII lines are
-  // hardwired to the trace pads and drive against the stream at speed
-  // (ENET_RST_B = GPIO_LPSR_04)
+  // hardwired to the trace pads and drive against the stream at speed. The
+  // reset net is a BOARD property (mimxrt1170_evkb: ENET_RST_B =
+  // GPIO_LPSR_04), hence the board.h gate.
   IOMUXC_SetPinMux(IOMUXC_GPIO_LPSR_04_GPIO12_IO04, 0U);
   GPIO12->GDIR |= (1U << 4);
   GPIO12->DR &= ~(1U << 4);
+#endif
 
   // TRACE0-3 + TRACE_CLK on GPIO_DISP_B2_02..06, fast slew + high drive
   IOMUXC_SetPinMux(IOMUXC_GPIO_DISP_B2_02_ARM_TRACE00, 0U);

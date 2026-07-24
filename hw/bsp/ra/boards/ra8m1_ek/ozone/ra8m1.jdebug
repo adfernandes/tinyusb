@@ -41,12 +41,14 @@ void BeforeTargetConnect (void) {
 *       AfterTargetConnect
 *
 * Function description
-*   Event handler routine. Optional.
+*   Cache the boot-ROM range for the trace decoder on --attach sessions
+*   too (the download hook that normally does this is skipped on attach).
 *
 **********************************************************************
 */
-//void AfterTargetConnect (void) {
-//}
+void AfterTargetConnect (void) {
+  Exec.Command("ReadIntoTraceCache 0x0 0x10000");
+}
 
 /*********************************************************************
 *

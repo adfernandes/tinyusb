@@ -61,6 +61,10 @@ def parse_profile(path):
             totals["run"], totals["fetch"] = run, fetch
         elif name == "[Unaccounted]":
             totals["unaccounted"] = fetch
+        elif name in funcs and funcs[name]["module"] != module:
+            # same-named static from another module: keep both rows distinct
+            funcs[f"{name} [{module}]"] = {"module": module, "run": run,
+                                           "fetch": fetch}
         else:
             funcs[name] = {"module": module, "run": run, "fetch": fetch}
     for module, name, cells in rows(lines[cov_start:prof_start]):
