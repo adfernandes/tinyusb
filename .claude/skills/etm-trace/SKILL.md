@@ -9,14 +9,14 @@ Streams full instruction (ETM) trace from a board wired to a SEGGER J-Trace,
 headlessly: no GUI, scripted end to end. Produces hot-function profile, code
 coverage, and optionally the raw instruction history.
 
-| Skill              | Answers                                                                    |
-|--------------------|----------------------------------------------------------------------------|
-| `usbmon`           | what the host actually exchanged (URBs)                                    |
-| `usb-target-debug` | what the device did (logs, driver state, sampled PCs)                      |
-| `usb-sniffer`      | what crossed the wire                                                      |
-| **`etm-trace`**    | **exactly which instructions executed, when** (profile, coverage, history) |
+| Skill           | Answers                                                                    |
+|-----------------|----------------------------------------------------------------------------|
+| `usbmon`        | what the host actually exchanged (URBs)                                    |
+| `target-debug`  | what the target did (logs, driver state, sampled PCs)                      |
+| `usb-sniffer`   | what crossed the wire                                                      |
+| **`etm-trace`** | **exactly which instructions executed, when** (profile, coverage, history) |
 
-Use `usb-target-debug`'s DWT PC-sampling for a quick statistical profile; use
+Use `target-debug`'s DWT PC-sampling for a quick statistical profile; use
 this skill for exact counts, coverage, or instruction-by-instruction history.
 
 ## Requirements
@@ -24,6 +24,10 @@ this skill for exact counts, coverage, or instruction-by-instruction history.
 - J-Trace on USB (`lsusb -d 1366:1020`) wired to the board's trace header;
   select it by J-Link USB **nickname** (this rig: `jtrace`) — never commit
   serials.
+- **Physical setup is per-board and exclusive** (one J-Trace, moved between
+  boards; some rigs are fly-wired): unless the user just asked for trace on
+  this board or your task states it is wired, **confirm with the user** that
+  the J-Trace is connected to the target before flashing or capturing.
 - `ozone` on PATH (≥ V3.38 for the automation socket) and `xvfb-run`.
 - Firmware built with **`-DTRACE_ETM=1`** (BSP trace-pin + trace-clock init).
 - Boards with a reference `hw/bsp/*/boards/<board>/ozone/*.jdebug` work out of
