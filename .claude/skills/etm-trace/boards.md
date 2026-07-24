@@ -23,7 +23,7 @@ reference.
 | ea4088_quickstart  | 120 MHz              | 120 MHz               | 4     | 0 (unset) | J7 (fully wired)              | —                                           |
 | nrf52840dk         | 64 MHz               | 16 MHz (hw cap)       | 4     | 0 (unset) | solder P25, SW7 → Alt         | —                                           |
 | nrf5340dk (M33)    | 64 MHz               | 16 MHz (TAD, forced)  | 4     | +3 ns   | mount P25; cut SB27/SB28      | —                                           |
-| mimxrt1170_evkb    | 996 MHz              | 25 MHz (root/2)       | 1     | 0       | populate 0 Ω R1881-R1886; J58 | verify/reflow R1882-R1884 → width 4         |
+| mimxrt1170_evkb    | 996 MHz              | 50 MHz (root/2)       | 1     | 0       | weld 0 Ω R1881-R1886; JP4 shorted; J58 (populated) | reflow R1882-R1884 (D1-D3 open) → width 4 |
 | ra6m5_ek (M33)     | 200 MHz              | 25 MHz (TRCLK/4 /2)   | 4     | 0 (unset) | J9 closed; native J20 trace | —                                           |
 | ra8m1_ek (M85)     | 480 MHz              | 60 MHz (TRCLK/4 /2)   | 4     | 0 (unset) | J9 closed + Table 7 jumpers | —                                           |
 | raspberry_pi_pico2 (RP2350 M33) | 48 MHz  | 24 MHz (clk_sys/2)    | 4     | 0 (unset) | fly-wire GPIO1-5 → MIPI20 (map in jdebug) | 72-80 MHz per seating (re-qualify); >80 needs V3 probe + trace board |
@@ -66,13 +66,19 @@ Board caveats (beyond the table):
   builds force the TAD port to 16 MHz (SystemInit's 64 MHz is marginal).
 - **ea4088_quickstart**: FS enumeration ends < 100 ms — for `--isr` use
   `--duration-ms 150`. Boot-ROM address warning (0x1FFF1FF0) is normal.
-- **mimxrt1170_evkb**: width 4 fails (D1-D3 path under investigation).
-  `trace_etm_init` fixes the JTAG_nTRST/DMIC_DATA1 pad, pins CSTRACE to
-  50 MHz (stock 132 MHz corrupts — the 100M PHY drives the CLK net) and
-  enables the CM7 platform trace-funnel port, which J-Link doesn't program:
-  without it everything reads register-perfect yet zero data arrives.
-  FlexSPI apps: ROM bootloader must set SP/PC — the committed reset/download
-  hooks handle this. Startup-burst overflow at 996 MHz is normal.
+- **mimxrt1170_evkb**: width 1 only — D1-D3 are stone silent at any config
+  (pinmux register-perfect, PHY quieted, funnel enabled): the welded 0402s
+  R1882/R1883/R1884 are electrically open — reflow to unlock width 4.
+  `trace_etm_init` fixes the JTAG_nTRST/DMIC_DATA1 pad, holds the 100M
+  RTL8201 PHY in reset (ENET_RST_B = GPIO_LPSR_04 — its RMII lines share
+  the trace pads; with it quiet the CLK line runs a 100 MHz root/50 MHz
+  pin, 2x the pre-lever rate; 133 MHz root is marginal, stock 132 corrupts)
+  and enables the CM7 platform trace-funnel port, which J-Link doesn't
+  program: without it everything reads register-perfect yet zero data
+  arrives. JP4 must be shorted (disables MCU-Link SWD) for the external
+  J-Trace on J58. FlexSPI apps: ROM bootloader must set SP/PC — the
+  committed reset/download hooks handle this. Startup-burst overflow at
+  996 MHz is normal. No Ethernet (100M) while tracing.
 - **ra6m5_ek**: TRCKCR div-2 (100 MHz TRCLK = 50 MHz pin, the chip max) is
   unusable on this board — swept widths 1/4 across -2..+4 ns, all dead;
   TRACE_ETM builds use div-4 (25 MHz pin). The TCLK pin runs TRCLK/2. 50 MHz SWD TIF

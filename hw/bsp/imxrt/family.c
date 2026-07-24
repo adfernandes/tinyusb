@@ -131,6 +131,13 @@ static void trace_etm_init(void) {
   // breaks ETM trace - switch the pad to GPIO (MIMXRT1170-EVKB HUG 3.2)
   IOMUXC_SetPinMux(IOMUXC_GPIO_LPSR_10_GPIO12_IO10, 0U);
 
+  // Hold the 100M Ethernet PHY (RTL8201) in reset: its RMII lines are
+  // hardwired to the trace pads and drive against the stream at speed
+  // (ENET_RST_B = GPIO_LPSR_04)
+  IOMUXC_SetPinMux(IOMUXC_GPIO_LPSR_04_GPIO12_IO04, 0U);
+  GPIO12->GDIR |= (1U << 4);
+  GPIO12->DR &= ~(1U << 4);
+
   // TRACE0-3 + TRACE_CLK on GPIO_DISP_B2_02..06, fast slew + high drive
   IOMUXC_SetPinMux(IOMUXC_GPIO_DISP_B2_02_ARM_TRACE00, 0U);
   IOMUXC_SetPinMux(IOMUXC_GPIO_DISP_B2_03_ARM_TRACE01, 0U);
@@ -143,9 +150,11 @@ static void trace_etm_init(void) {
   IOMUXC_SetPinConfig(IOMUXC_GPIO_DISP_B2_05_ARM_TRACE03, IOMUXC_SW_PAD_CTL_PAD_DSE_MASK);
   IOMUXC_SetPinConfig(IOMUXC_GPIO_DISP_B2_06_ARM_TRACE_CLK, IOMUXC_SW_PAD_CTL_PAD_DSE_MASK);
 
-  // 50 MHz CSTRACE root (OscRc400M/8) -> 25 MHz TRACE_CLK pin (= root/2)
+  // 100 MHz CSTRACE root (OscRc400M/4) -> 50 MHz TRACE_CLK pin (= root/2).
+  // With the PHY held in reset the CLK line is clean here; 133 MHz root
+  // (66 MHz pin) is marginal on this board, stock 132 MHz corrupts.
   CLOCK_SetRootClockMux(kCLOCK_Root_Cstrace, kCLOCK_CSTRACE_ClockRoot_MuxOscRc400M);
-  CLOCK_SetRootClockDiv(kCLOCK_Root_Cstrace, 8);
+  CLOCK_SetRootClockDiv(kCLOCK_Root_Cstrace, 4);
   CLOCK_EnableClock(kCLOCK_Cstrace);
 
   // Enable the CM7 slave port on the platform trace funnel (E004_3000): the
