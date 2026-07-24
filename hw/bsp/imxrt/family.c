@@ -106,6 +106,62 @@ static void init_usb_phy(uint8_t usb_id) {
   usb_phy->TX = phytx;
 }
 
+#ifdef TRACE_ETM
+static void trace_etm_init(void) {
+#if defined(CPU_MIMXRT1011DAE5A)
+  // Metro M7 rev A "ETM Trace" rework: 4-bit TRACE + TRACE_CLK on the added
+  // 2x10 header; the RT1011 has a single mux option per trace signal
+  IOMUXC_SetPinMux(IOMUXC_GPIO_AD_00_ARM_TRACE0, 0U);
+  IOMUXC_SetPinMux(IOMUXC_GPIO_13_ARM_TRACE1, 0U);
+  IOMUXC_SetPinMux(IOMUXC_GPIO_12_ARM_TRACE2, 0U);
+  IOMUXC_SetPinMux(IOMUXC_GPIO_11_ARM_TRACE3, 0U);
+  IOMUXC_SetPinMux(IOMUXC_GPIO_AD_02_ARM_TRACE_CLK, 0U);
+  // fast slew, max speed, high drive
+  IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_00_ARM_TRACE0, 0x00F1U);
+  IOMUXC_SetPinConfig(IOMUXC_GPIO_13_ARM_TRACE1, 0x00F1U);
+  IOMUXC_SetPinConfig(IOMUXC_GPIO_12_ARM_TRACE2, 0x00F1U);
+  IOMUXC_SetPinConfig(IOMUXC_GPIO_11_ARM_TRACE3, 0x00F1U);
+  IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_02_ARM_TRACE_CLK, 0x00F1U);
+
+  // TRACE_CLK_ROOT already runs 132 MHz (PLL2/4) from BOARD_BootClockRUN,
+  // which leaves it gated - just ungate
+  CLOCK_EnableClock(kCLOCK_Trace);
+#elif defined(CPU_MIMXRT1176DVMAA_cm7)
+  // JTAG_nTRST pad is shared with DMIC_DATA1 which drives it low by default and
+  // breaks ETM trace - switch the pad to GPIO (MIMXRT1170-EVKB HUG 3.2)
+  IOMUXC_SetPinMux(IOMUXC_GPIO_LPSR_10_GPIO12_IO10, 0U);
+
+  // TRACE0-3 + TRACE_CLK on GPIO_DISP_B2_02..06, fast slew + high drive
+  IOMUXC_SetPinMux(IOMUXC_GPIO_DISP_B2_02_ARM_TRACE00, 0U);
+  IOMUXC_SetPinMux(IOMUXC_GPIO_DISP_B2_03_ARM_TRACE01, 0U);
+  IOMUXC_SetPinMux(IOMUXC_GPIO_DISP_B2_04_ARM_TRACE02, 0U);
+  IOMUXC_SetPinMux(IOMUXC_GPIO_DISP_B2_05_ARM_TRACE03, 0U);
+  IOMUXC_SetPinMux(IOMUXC_GPIO_DISP_B2_06_ARM_TRACE_CLK, 0U);
+  IOMUXC_SetPinConfig(IOMUXC_GPIO_DISP_B2_02_ARM_TRACE00, IOMUXC_SW_PAD_CTL_PAD_DSE_MASK);
+  IOMUXC_SetPinConfig(IOMUXC_GPIO_DISP_B2_03_ARM_TRACE01, IOMUXC_SW_PAD_CTL_PAD_DSE_MASK);
+  IOMUXC_SetPinConfig(IOMUXC_GPIO_DISP_B2_04_ARM_TRACE02, IOMUXC_SW_PAD_CTL_PAD_DSE_MASK);
+  IOMUXC_SetPinConfig(IOMUXC_GPIO_DISP_B2_05_ARM_TRACE03, IOMUXC_SW_PAD_CTL_PAD_DSE_MASK);
+  IOMUXC_SetPinConfig(IOMUXC_GPIO_DISP_B2_06_ARM_TRACE_CLK, IOMUXC_SW_PAD_CTL_PAD_DSE_MASK);
+
+  // 50 MHz CSTRACE root (OscRc400M/8) -> 25 MHz TRACE_CLK pin (= root/2)
+  CLOCK_SetRootClockMux(kCLOCK_Root_Cstrace, kCLOCK_CSTRACE_ClockRoot_MuxOscRc400M);
+  CLOCK_SetRootClockDiv(kCLOCK_Root_Cstrace, 8);
+  CLOCK_EnableClock(kCLOCK_Cstrace);
+
+  // Enable the CM7 slave port on the platform trace funnel (E004_3000): the
+  // debugger only programs the CSSYS funnel/TPIU it was told about, and this
+  // in-between funnel resets with all ports disabled, silently eating the ETM
+  // stream. Core-side CoreSight accesses honor the lock, hence the LAR unlock.
+  *(volatile uint32_t *) 0xE0043FB0 = 0xC5ACCE55;
+  *(volatile uint32_t *) 0xE0043000 |= 1U;
+#else
+  #error "TRACE_ETM: no trace pin setup for this MCU variant"
+#endif
+}
+#else
+  #define trace_etm_init()
+#endif
+
 void board_init(void) {
 // make sure the dcache is on.
 #if defined(__DCACHE_PRESENT) && __DCACHE_PRESENT
@@ -119,10 +175,7 @@ void board_init(void) {
   SystemCoreClockUpdate();
 
   BOARD_ConfigMPU(); // defined in board.h
-
-#ifdef TRACE_ETM
-  //CLOCK_EnableClock(kCLOCK_Trace);
-#endif
+  trace_etm_init();
 
 #if CFG_TUSB_OS == OPT_OS_NONE
   // 1ms tick timer
